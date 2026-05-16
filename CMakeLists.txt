@@ -1,139 +1,138 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.15)
 
-project(KOBODELUXE)
+project(kobodeluxe
+    VERSION 0.6.0
+    DESCRIPTION "Arcade style 2D shooter"
+    LANGUAGES C CXX)
 
 set(KOBO_ORGANIZATION "OlofsonArcade")
+set(KOBO_APPLICATION  "KoboDeluxe")
 
-set(VERSION_MAJOR 0)
-set(VERSION_MINOR 6)
-set(VERSION_PATCH 0)
+set(VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(VERSION_PATCH ${PROJECT_VERSION_PATCH})
 set(VERSION_BUILD 0)
+set(VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+set(PACKAGE "kobodeluxe-${VERSION_STRING}")
 
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
 option(WIN32_ZIP_BUILD "Build flat Win32 ZIP archive." OFF)
-option(WORKDIR "Top level build/staging directory."
-	"${KOBODELUXE_SOURCE_DIR}/build")
+set(WORKDIR "${PROJECT_SOURCE_DIR}/build" CACHE PATH "Top level build/staging directory.")
 set(KOBO_EXTRA_LIBRARIES "" CACHE STRING "Extra libraries to link with.")
 
-message(".-----------------------------------------")
-message("|      WIN32_ZIP_BUILD: ${WIN32_ZIP_BUILD}")
-message("|              WORKDIR: ${WORKDIR}")
-message("| KOBO_EXTRA_LIBRARIES: ${KOBO_EXTRA_LIBRARIES}")
-message("'-----------------------------------------")
+message(STATUS ".-----------------------------------------")
+message(STATUS "|      WIN32_ZIP_BUILD: ${WIN32_ZIP_BUILD}")
+message(STATUS "|              WORKDIR: ${WORKDIR}")
+message(STATUS "| KOBO_EXTRA_LIBRARIES: ${KOBO_EXTRA_LIBRARIES}")
+message(STATUS "'-----------------------------------------")
 
-set(KOBO_APPLICATION "KoboDeluxe")
-if(WIN32)
-	set(KOBO_PACKAGE_NAME "KoboDeluxe")
-else(WIN32)
-	set(KOBO_PACKAGE_NAME "kobodeluxe")
-endif(WIN32)
-
-if(VERSION_BUILD)
-	set(VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_BUILD}")
-else(VERSION_BUILD)
-	set(VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
-endif(VERSION_BUILD)
-set(PACKAGE "${KOBO_PACKAGE_NAME}-${VERSION_STRING}")
-
-# Release build: full optimization, no debug features, no debug info
-set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
-
-# Maintainer build: No optimizations, lots of warnings, fail on warnings
-set(f "-O0 -g -Wall -Wwrite-strings -Wcast-align")
-set(f "${f} -Wbad-function-cast -Waggregate-return")
-set(f "${f} -Wstrict-prototypes -fno-builtin -Wshadow")
-set(f "${f} -Wdeclaration-after-statement -Wmissing-prototypes")
-set(f "${f} -Wmissing-declarations -Wdisabled-optimization")
-set(CMAKE_C_FLAGS_MAINTAINER "${f} -Werror")
-
-# Debug build: Maintainer + extra debug features, don't fail on warnings
-set(f "${f} -DDEBUG")
-set(CMAKE_C_FLAGS_DEBUG ${f})
-
+# ---------------------------------------------------------------------------
+# Install layout
+# ---------------------------------------------------------------------------
 if(WIN32 AND WIN32_ZIP_BUILD)
-	# Of course, you're not supposed to use 'make install' when using this!
-	# This is a dirty hack to build Win32 ZIP archives.
-	set(KOBO_BIN_DIR "/")
-	set(KOBO_SHARE_DIR "/")
-	set(KOBO_DOC_DIR "/")
-else(WIN32 AND WIN32_ZIP_BUILD)
-	set(KOBO_BIN_DIR "bin")
-	set(KOBO_SHARE_DIR "share/${KOBO_PACKAGE_NAME}")
-	set(KOBO_DOC_DIR "share/doc/${KOBO_PACKAGE_NAME}")
-endif(WIN32 AND WIN32_ZIP_BUILD)
+    set(KOBO_BIN_DIR   "/")
+    set(KOBO_SHARE_DIR "/")
+    set(KOBO_DOC_DIR   "/")
+elseif(APPLE)
+    # For a macOS .app bundle the binary lives inside the bundle; a separate
+    # prefix-relative bin/ is not meaningful.  Data and docs go alongside it.
+    set(KOBO_BIN_DIR   ".")
+    set(KOBO_SHARE_DIR ".")
+    set(KOBO_DOC_DIR   ".")
+else()
+    set(KOBO_BIN_DIR   "bin")
+    set(KOBO_SHARE_DIR "share/kobodeluxe")
+    set(KOBO_DOC_DIR   "share/doc/kobodeluxe")
+endif()
 
+# ---------------------------------------------------------------------------
+# Compiler flags (shared between C and C++ unless noted)
+# ---------------------------------------------------------------------------
+set(KOBO_FLAGS_RELEASE  "-O3 -DNDEBUG")
+set(KOBO_FLAGS_MAINTAIN "-O0 -g -Wall -Wwrite-strings -Wcast-align -Wshadow -Wdisabled-optimization")
+
+set(CMAKE_C_FLAGS_RELEASE          "${KOBO_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS_RELEASE        "${KOBO_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_MAINTAINER       "${KOBO_FLAGS_MAINTAIN} -Wbad-function-cast -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Werror")
+set(CMAKE_CXX_FLAGS_MAINTAINER     "${KOBO_FLAGS_MAINTAIN} -Wmissing-declarations -Werror")
+set(CMAKE_C_FLAGS_DEBUG            "${KOBO_FLAGS_MAINTAIN} -DDEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG          "${KOBO_FLAGS_MAINTAIN} -DDEBUG")
+
+# ---------------------------------------------------------------------------
+# Subdirectories
+# ---------------------------------------------------------------------------
 add_subdirectory(src)
 
-# Game data files
+# ---------------------------------------------------------------------------
+# Game data
+# ---------------------------------------------------------------------------
 install(DIRECTORY data/gfx
-	DESTINATION "${KOBO_SHARE_DIR}"
-	FILES_MATCHING
-	PATTERN "*.png"
-	PATTERN "*.gpl"
-	PATTERN "*.theme")
+    DESTINATION "${KOBO_SHARE_DIR}"
+    FILES_MATCHING
+        PATTERN "*.png"
+        PATTERN "*.gpl"
+        PATTERN "*.theme")
+
 install(DIRECTORY data/sfx
-	DESTINATION "${KOBO_SHARE_DIR}"
-	FILES_MATCHING
-	PATTERN "*.a2s"
-	PATTERN "*.theme")
+    DESTINATION "${KOBO_SHARE_DIR}"
+    FILES_MATCHING
+        PATTERN "*.a2s"
+        PATTERN "*.theme")
 
+# ---------------------------------------------------------------------------
 # Documentation
+# ---------------------------------------------------------------------------
 file(GLOB doc_files
-	"${KOBODELUXE_SOURCE_DIR}/*.md"
-	"${KOBODELUXE_SOURCE_DIR}/COPYING*")
-list(REMOVE_ITEM doc_files "${KOBODELUXE_SOURCE_DIR}/INSTALL.md")
-install(FILES ${doc_files}
-	DESTINATION "${KOBO_DOC_DIR}")
+    "${PROJECT_SOURCE_DIR}/*.md"
+    "${PROJECT_SOURCE_DIR}/COPYING*")
+list(REMOVE_ITEM doc_files "${PROJECT_SOURCE_DIR}/INSTALL.md")
+install(FILES ${doc_files} DESTINATION "${KOBO_DOC_DIR}")
 
-# Desktop entry
-if(NOT WIN32)
-	set(KOBO_DE_FILE "net.olofson.${KOBO_PACKAGE_NAME}.desktop")
-	install(FILES "${KOBODELUXE_SOURCE_DIR}/icons/kobodeluxe.png"
-		DESTINATION "share/pixmaps"
-		RENAME "${KOBO_PACKAGE_NAME}.png")
-	install(FILES "${KOBODELUXE_SOURCE_DIR}/icons/${KOBO_DE_FILE}"
-		DESTINATION "share/applications")
-endif(NOT WIN32)
+# ---------------------------------------------------------------------------
+# Desktop integration (Linux only)
+# ---------------------------------------------------------------------------
+if(NOT WIN32 AND NOT APPLE)
+    install(FILES "${PROJECT_SOURCE_DIR}/icons/kobodeluxe.png"
+        DESTINATION "share/pixmaps"
+        RENAME "kobodeluxe.png")
+    install(FILES "${PROJECT_SOURCE_DIR}/icons/net.olofson.kobodeluxe.desktop"
+        DESTINATION "share/applications")
+endif()
 
-# Win32 redistributables (SDL2, Audiality 2, libstdc++ etc)
+# ---------------------------------------------------------------------------
+# Win32 redistributables
+# ---------------------------------------------------------------------------
 if(WIN32)
-	file(GLOB win32_redist_files "${WORKDIR}/win32-redist/*")
-	install(FILES ${win32_redist_files}
-		DESTINATION "${KOBO_BIN_DIR}")
-endif(WIN32)
+    file(GLOB win32_redist_files "${WORKDIR}/win32-redist/*")
+    install(FILES ${win32_redist_files} DESTINATION "${KOBO_BIN_DIR}")
+endif()
 
-# CPack general
-if(WIN32)
-	# Windows ZIP archive
-	set(CPACK_GENERATOR "ZIP")
-else(WIN32)
-	# Linux packages
-	set(CPACK_GENERATOR "DEB" "RPM" "TBZ2")
-endif(WIN32)
-set(CPACK_SET_DESTDIR ON)
-set(CPACK_PACKAGE_RELOCATABLE false)
-set(CPACK_STRIP_FILES true)
-set(CPACK_PACKAGE_NAME "${KOBO_PACKAGE_NAME}")
-set(CPACK_PACKAGE_VERSION "${VERSION_STRING}")
-set(CPACK_PACKAGE_CONTACT "David Olofson <david@olofson.net>")
-set(CPACK_RESOURCE_FILE_LICENSE "${KOBODELUXE_SOURCE_DIR}/COPYING")
-set(CPACK_RESOURCE_FILE_README "${KOBODELUXE_SOURCE_DIR}/README.md")
+# ---------------------------------------------------------------------------
+# CPack
+# ---------------------------------------------------------------------------
+include(GNUInstallDirs)
+
+set(CPACK_PACKAGE_NAME              "kobodeluxe")
+set(CPACK_PACKAGE_VERSION           "${VERSION_STRING}")
+set(CPACK_PACKAGE_CONTACT           "David Olofson <david@olofson.net>")
+set(CPACK_RESOURCE_FILE_LICENSE     "${PROJECT_SOURCE_DIR}/COPYING")
+set(CPACK_RESOURCE_FILE_README      "${PROJECT_SOURCE_DIR}/README.md")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Arcade style 2D shooter")
-set(CPACK_PACKAGE_DESCRIPTION "Frantic 80's style 2D shooter, inspired by the look and feel of 90's arcades.")
+set(CPACK_STRIP_FILES               TRUE)
+set(CPACK_SET_DESTDIR               ON)
+set(CPACK_PACKAGE_RELOCATABLE       FALSE)
 
-# CPack DEB
-set(CPACK_DEBIAN_PACKAGE_SECTION "games")
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-set(CPACK_DEBIAN_PACKAGE_SUMMARY "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
-set(CPACK_DEBIAN_PACKAGE_DESCRIPTION
-"Arcade style 2D shooter\n Kobo Deluxe is a frantic 80's style 2D shooter, inspired by the look and\n feel of 90's arcade cabinets. The game play is fast and unforgiving.\n A true challenge in the spirit of the arcade era!")
-
-# CPack PRM
-set(CPACK_RPM_PACKAGE_GROUP "Games")
-set(CPACK_RPM_PACKAGE_DESCRIPTION "${CPACK_DEBIAN_PACKAGE_DESCRIPTION}")
-set(CPACK_RPM_PACKAGE_LICENSE "GPLv2+")
-set(CPACK_RPM_PACKAGE_URL "http://kobodeluxe.com")
-set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
-	/usr/share/applications /usr/share/pixmaps)
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+elseif(APPLE)
+    set(CPACK_GENERATOR "TGZ")
+else()
+    set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_DEBIAN_PACKAGE_SECTION    "games")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS  ON)
+    set(CMAKE_INSTALL_RPATH             "${CMAKE_INSTALL_PREFIX}/lib")
+endif()
 
 include(CPack)
