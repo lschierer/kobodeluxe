@@ -297,7 +297,7 @@ static void _grab(Sint16 *buf, unsigned frames)
  * Unit is not important as calculations are relative.
  */
 # if defined(__GNUC__) && defined(i386)
-inline int timestamp(void)
+static inline int timestamp(void)
 {
 	unsigned long long int x;
 	__asm__ volatile (".byte 0x0f, 0x31" : "=A" (x));
@@ -315,14 +315,14 @@ inline int timestamp(void)
 #	  include <time.h>
 #	 endif
 #	endif
-inline int timestamp(void)
+static inline int timestamp(void)
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 #  else
-inline int timestamp(void)
+static inline int timestamp(void)
 {
 	return SDL_GetTicks();
 }

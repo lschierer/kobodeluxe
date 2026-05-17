@@ -137,13 +137,13 @@ int window_t::offscreen()
 		return 0;	// Already offscreen!
 	visible(0);
 	_offscreen = 1;
-	SDL_Surface *s = SDL_CreateRGBSurface(SDL_SWSURFACE,
+	SDL_Surface *s = SDL_CreateRGBSurface(0,
 			phys_rect.w, phys_rect.h,
-			32, 0xff000000, 0x00ff0000,
-			0x0000ff00, 0x000000ff);
+			32, 0x00ff0000, 0x0000ff00,
+			0x000000ff, 0xff000000);
 	if(!s)
 		return -1;
-	surface = SDL_DisplayFormat(s);
+	surface = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_ARGB8888, 0);
 	SDL_FreeSurface(s);
 	if(!surface)
 		return -1;
@@ -186,13 +186,9 @@ void window_t::invalidate(SDL_Rect *r)
 			rr.w = phys_rect.w;
 			rr.h = phys_rect.h;
 			phys_refresh(&rr);
-			glSDL_Invalidate(surface, &rr);
 		}
 		else
-		{
 			phys_refresh(r);
-			glSDL_Invalidate(surface, r);
-		}
 		return;
 	}
 
@@ -287,7 +283,7 @@ void window_t::colorkey(Uint32 color)
 		return;
 	if(!_offscreen)
 		return;
-	SDL_SetColorKey(surface, SDL_SRCCOLORKEY, color);
+	SDL_SetColorKey(surface, SDL_TRUE, color);
 }
 
 void window_t::colorkey()
@@ -298,7 +294,7 @@ void window_t::colorkey()
 		return;
 	if(!_offscreen)
 		return;
-	SDL_SetColorKey(surface, 0, 0);
+	SDL_SetColorKey(surface, SDL_FALSE, 0);
 }
 
 void window_t::alpha(float a)
@@ -309,7 +305,8 @@ void window_t::alpha(float a)
 		return;
 	if(!_offscreen)
 		return;
-	SDL_SetAlpha(surface, SDL_SRCALPHA, (int)(a * 255.0));
+	SDL_SetSurfaceAlphaMod(surface, (Uint8)(a * 255.0));
+	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
 }
 
 

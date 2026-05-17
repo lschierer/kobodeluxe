@@ -256,8 +256,7 @@ int s_filter_rgba8(s_bank_t *b, unsigned first, unsigned frames,
 		s_sprite_t *s = s_get_sprite_b(b, first+i);
 		if(!s)
 			continue;
-		tmp = SDL_ConvertSurface(s->surface, &fmt,
-				SDL_SWSURFACE);
+		tmp = SDL_ConvertSurface(s->surface, &fmt, 0);
 		if(!tmp)
 			return -1;
 
@@ -489,47 +488,46 @@ int s_filter_displayformat(s_bank_t * b, unsigned first, unsigned frames,
 		{
 		  case S_BLITMODE_AUTO:
 			if(s->surface->format->Amask)
-				SDL_SetAlpha(s->surface,
-						SDL_SRCALPHA |
-						SDL_RLEACCEL,
-						SDL_ALPHA_OPAQUE);
+			{
+				SDL_SetSurfaceBlendMode(s->surface, SDL_BLENDMODE_BLEND);
+				SDL_SetSurfaceAlphaMod(s->surface, SDL_ALPHA_OPAQUE);
+			}
 			else
-				SDL_SetColorKey(s->surface, SDL_RLEACCEL, 0);
+				SDL_SetColorKey(s->surface, SDL_FALSE, 0);
 			break;
 		  case S_BLITMODE_OPAQUE:
-			SDL_SetColorKey(s->surface, SDL_RLEACCEL, 0);
+			SDL_SetColorKey(s->surface, SDL_FALSE, 0);
 			break;
 		  case S_BLITMODE_COLORKEY:
 			SDL_SetColorKey(s->surface,
-					SDL_SRCCOLORKEY | SDL_RLEACCEL,
+					SDL_TRUE,
 					SDL_MapRGB(s->surface->format,
 						s_colorkey.r,
 						s_colorkey.g,
 						s_colorkey.b));
 			break;
 		  case S_BLITMODE_ALPHA:
-			SDL_SetAlpha(s->surface,
-					SDL_SRCALPHA | SDL_RLEACCEL,
-					s_alpha);
+			SDL_SetSurfaceBlendMode(s->surface, SDL_BLENDMODE_BLEND);
+			SDL_SetSurfaceAlphaMod(s->surface, s_alpha);
 			break;
 		}
 
+		// SDL2: use ARGB8888 for all sprite surfaces so blending is
+		// consistent regardless of display pixel format.
 		if(args->x)
 		{
 			if(s->surface->format->Amask)
 				tweak_ck(s->surface);
-			tmp = SDL_DisplayFormat(s->surface);
+			tmp = SDL_ConvertSurfaceFormat(s->surface,
+					SDL_PIXELFORMAT_RGB24, 0);
 			if(s->surface->format->Amask)
-				SDL_SetColorKey(tmp,
-						SDL_SRCCOLORKEY | SDL_RLEACCEL,
+				SDL_SetColorKey(tmp, SDL_TRUE,
 						SDL_MapRGB(tmp->format, 0,0,0));
 		}
 		else
 		{
-			if(s->surface->format->Amask)
-				tmp = SDL_DisplayFormatAlpha(s->surface);
-			else
-				tmp = SDL_DisplayFormat(s->surface);
+			tmp = SDL_ConvertSurfaceFormat(s->surface,
+					SDL_PIXELFORMAT_ARGB8888, 0);
 		}
 		if(!tmp)
 			return -1;
@@ -900,7 +898,7 @@ int s_filter_scale(s_bank_t *b, unsigned first, unsigned frames,
 		if(!s)
 			continue;
 		params.src = s->surface;
-		params.dst = SDL_CreateRGBSurface(SDL_SWSURFACE,
+		params.dst = SDL_CreateRGBSurface(0,
 				params.max_x, params.max_y, 32,
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);

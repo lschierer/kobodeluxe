@@ -37,7 +37,6 @@ set(sources
     graphics/display.cpp
     graphics/filters.c
     graphics/gfxengine.cpp
-    graphics/glSDL.c
     graphics/region.c
     graphics/sofont.cpp
     graphics/sprite.c
