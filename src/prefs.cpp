@@ -41,8 +41,8 @@ void prefs_t::init()
 	key("logverbosity", logverbosity, 2); desc("Log Verbosity Level");
 
 	comment("--- Input options --------------------------");
-	yesno("joystick", use_joystick, 0); desc("Use Joystick");
-	key("joystick_no", joystick_no, 0); desc("Joystick Number");
+	yesno("joystick", use_joystick, 0); desc("Use Game Controller");
+	key("joystick_no", joystick_no, 0); desc("Game Controller Number");
 	yesno("mouse", use_mouse, 0); desc("Use Mouse");
 	key("mousemode", mousemode, MMD_CROSSHAIR); desc("Mouse Control Mode");
 	yesno("broken_numdia", broken_numdia, 0); desc("Broken NumPad Diagonals");
