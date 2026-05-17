@@ -166,6 +166,21 @@ static void setup_dirs(char *xpath)
 #ifdef KOBO_USERDIR
 	fmap->addpath("CONFIG", KOBO_USERDIR);
 #endif
+
+#ifdef KOBO_USERDIR
+	// Create the user data directory on first run if it doesn't exist.
+	{
+		const char *home = getenv("HOME");
+		if(home)
+		{
+			char userdir[512];
+			snprintf(userdir, sizeof(userdir), "%s/.kobodeluxe", home);
+			struct stat st;
+			if(stat(userdir, &st) != 0)
+				::mkdir(userdir, 0755);
+		}
+	}
+#endif
 	/* System local */
 #ifdef KOBO_SYSCONFDIR
 	fmap->addpath("CONFIG", KOBO_SYSCONFDIR);
