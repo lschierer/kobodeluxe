@@ -171,7 +171,6 @@ void prefs_t::postload()
 		scrollradar = 2;
 	}
 
-	// Some unimplemented enums were removed in 0.4.1
-	if(videodriver != GFX_DRIVER_SDL2D)
-		videodriver = GFX_DRIVER_GLSDL;
+	// glSDL driver removed in SDL2 migration; force SDL2D
+	videodriver = GFX_DRIVER_SDL2D;
 }

@@ -29,7 +29,6 @@
 #include "gfxengine.h"
 #include "filters.h"
 #include "SDL_image.h"
-#include "glSDL.h"
 #include "sofont.h"
 #include "window.h"
 
@@ -40,6 +39,7 @@ gfxengine_t::gfxengine_t()
 {
 	gfxengine = this;	/* Uurgh! Kludge. */
 
+	sdl_window = NULL;
 	screen_surface = NULL;
 	softbuf = NULL;
 	fullwin = NULL;
@@ -443,23 +443,10 @@ void gfxengine_t::dither(int type, int _broken_rgba8)
 
 	if(_dither)
 	{
-		if(_driver == GFX_DRIVER_GLSDL)
-		{
-			//Klugde for glSDL, which doesn't give us a faked
-			//screen surface - while we're interested only in
-			//the *texture* depth; not the display depth!
-			df->args.r = df->args.g = df->args.b = 0;
-			//Another kludge, because some cards support RGB8
-			//(24 bit) textures, but not RGBA8 (32 bit).
-			df->args.x = broken_rgba8;
-		}
-		else
-		{
-			df->args.x = 0;
-			df->args.r = 1<<(screen_surface->format->Rloss-1);
-			df->args.g = 1<<(screen_surface->format->Gloss-1);
-			df->args.b = 1<<(screen_surface->format->Bloss-1);
-		}
+		df->args.x = 0;
+		df->args.r = 1<<(screen_surface->format->Rloss-1);
+		df->args.g = 1<<(screen_surface->format->Gloss-1);
+		df->args.b = 1<<(screen_surface->format->Bloss-1);
 	}
 	else
 		df->args.x = df->args.r = df->args.g = df->args.b = 0;
@@ -745,8 +732,8 @@ void gfxengine_t::title(const char *win, const char *icon)
 {
 	_title = win;
 	_icontitle = icon;
-	if(screen_surface)
-		SDL_WM_SetCaption(_title, _icontitle);
+	if(sdl_window)
+		SDL_SetWindowTitle(sdl_window, _title);
 }
 
 
@@ -756,16 +743,11 @@ void gfxengine_t::title(const char *win, const char *icon)
 
 int gfxengine_t::show()
 {
-	int flags = 0;
-
 	if(!is_open)
 		return -1;
 
 	if(is_showing)
 		return 0;
-
-	if(_centered && !_fullscreen)
-		SDL_putenv((char *)"SDL_VIDEO_CENTERED=1");
 
 	log_printf(DLOG, "Opening screen...\n");
 	if(!SDL_WasInit(SDL_INIT_VIDEO))
@@ -775,111 +757,47 @@ int gfxengine_t::show()
 			return -2;
 		}
 
-	switch(_driver)
-	{
-	  case GFX_DRIVER_SDL2D:
-		break;
-	  case GFX_DRIVER_GLSDL:
-		if(!_doublebuf)
-		{
-			log_printf(WLOG, "Only double buffering is supported"
-					" with OpenGL drivers!\n");
-			doublebuffer(1);
-		}
-		if(_shadow)
-		{
-			log_printf(WLOG, "Shadow buffer not supported"
-					" with OpenGL drivers!\n");
-			shadow(0);
-		}
-		break;
-	}
-
-	switch(_driver)
-	{
-	  case GFX_DRIVER_SDL2D:
-		/* Nothing extra */
-		break;
-	  case GFX_DRIVER_GLSDL:
-	  	flags |= SDL_GLSDL;
-		break;
-	}
-
-	if(_doublebuf)
-		flags |= SDL_DOUBLEBUF | SDL_HWSURFACE;
-	else
-	{
-		if(!_shadow)
-		  	flags |= SDL_HWSURFACE;
-	}
-
+	Uint32 window_flags = SDL_WINDOW_SHOWN;
 	if(_fullscreen)
-		flags |= SDL_FULLSCREEN;
+		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-	glSDL_VSync(_vsync);
-	flags |= xflags;
-
-	screen_surface = SDL_SetVideoMode(_width, _height, _depth, flags);
-	if(!screen_surface)
+	sdl_window = SDL_CreateWindow(_title,
+			SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+			_width, _height, window_flags);
+	if(!sdl_window)
 	{
-		log_printf(ELOG, "Failed to open display!\n");
+		log_printf(ELOG, "Failed to create window: %s\n", SDL_GetError());
 		return -3;
 	}
 
-	if(_driver != GFX_DRIVER_GLSDL)
+	screen_surface = SDL_GetWindowSurface(sdl_window);
+	if(!screen_surface)
 	{
-		if((screen_surface->flags & SDL_DOUBLEBUF) == SDL_DOUBLEBUF)
-		{
-			if(!_doublebuf)
-			{
-				log_printf(WLOG, "Could not get"
-						" single buffered display.\n");
-				doublebuffer(1);
-			}
-		}
-		else
-		{
-			if(_doublebuf)
-			{
-				log_printf(WLOG, "Could not get"
-						" double buffered display.\n");
-				doublebuffer(0);
-			}
-		}
+		log_printf(ELOG, "Failed to get window surface: %s\n", SDL_GetError());
+		SDL_DestroyWindow(sdl_window);
+		sdl_window = NULL;
+		return -4;
 	}
 
-	if((screen_surface->flags & SDL_HWSURFACE) == SDL_HWSURFACE)
+	// Always render into a shadow buffer; blit dirty rects to the window
+	// surface on flip. This decouples rendering from the window surface
+	// format and lets the dirty-rect tracking work correctly.
+	softbuf = SDL_CreateRGBSurface(0,
+			_width, _height,
+			screen_surface->format->BitsPerPixel,
+			screen_surface->format->Rmask,
+			screen_surface->format->Gmask,
+			screen_surface->format->Bmask,
+			screen_surface->format->Amask);
+	if(!softbuf)
 	{
-		if(_shadow)
-		{
-			softbuf = SDL_CreateRGBSurface(SDL_SWSURFACE,
-					_width, _height,
-					screen_surface->format->BitsPerPixel,
-					screen_surface->format->Rmask,
-					screen_surface->format->Gmask,
-					screen_surface->format->Bmask,
-					screen_surface->format->Amask);
-			if(!softbuf)
-			{
-				log_printf(WLOG, "Failed to create shadow buffer! "
-						"Trying direct rendering.\n");
-				shadow(0);
-			}
-		}
-	}
-	else
-	{
-		if(_shadow)
-			log_printf(WLOG, "Shadow buffer requested; "
-					"relying on SDL's shadow buffer.\n");
-		else
-		{
-			log_printf(WLOG, "Could not get h/w display surface.\n");
-			shadow(0);	//...which means we're using SDL's shadow.
-		}
+		log_printf(ELOG, "Failed to create shadow buffer: %s\n", SDL_GetError());
+		SDL_DestroyWindow(sdl_window);
+		sdl_window = NULL;
+		screen_surface = NULL;
+		return -5;
 	}
 
-	SDL_WM_SetCaption(_title, _icontitle);
 	SDL_ShowCursor(_cursor);
 	cs_engine_set_size(csengine, _width, _height);
 	csengine->filter = use_interpolation;
@@ -939,6 +857,12 @@ void gfxengine_t::hide(void)
 		softbuf = NULL;
 	}
 	screen_surface = NULL;
+
+	if(sdl_window)
+	{
+		SDL_DestroyWindow(sdl_window);
+		sdl_window = NULL;
+	}
 
 	is_showing = 0;
 }
@@ -1108,7 +1032,7 @@ void gfxengine_t::stop()
 void gfxengine_t::cursor(int csr)
 {
 	_cursor = csr;
-	if(screen_surface)
+	if(sdl_window)
 		SDL_ShowCursor(csr);
 }
 
@@ -1330,18 +1254,21 @@ void gfxengine_t::flip()
 			refresh_rect(&dirtytable[backpage][i]);
 	}
 
-	// Perform the actual flip or update
-	if(_shadow)
-	{
-		for(i = 0; i < dirtyrects[backpage]; ++i)
-			SDL_BlitSurface(softbuf,
-					&dirtytable[backpage][i],
-					screen_surface,
-					&dirtytable[backpage][i]);
-	}
+	// Blit dirty rects from shadow buffer to window surface, then present.
+	// SDL2 has no hardware double-buffering in surface mode; we always use
+	// the shadow buffer and SDL_UpdateWindowSurfaceRects.
+	for(i = 0; i < dirtyrects[backpage]; ++i)
+		SDL_BlitSurface(softbuf,
+				&dirtytable[backpage][i],
+				screen_surface,
+				&dirtytable[backpage][i]);
+
+	SDL_UpdateWindowSurfaceRects(sdl_window,
+			dirtytable[backpage], dirtyrects[backpage]);
+
+	dirtyrects[backpage] = 0;
 	if(_doublebuf)
 	{
-		dirtyrects[backpage] = 0;
 		if(_pages == -1)
 		{
 			backpage = !backpage;
@@ -1352,12 +1279,6 @@ void gfxengine_t::flip()
 			backpage = (backpage + 1) % _pages;
 			frontpage = (frontpage + 1) % _pages;
 		}
-		SDL_Flip(screen_surface);
-	}
-	else
-	{
-		SDL_UpdateRects(screen_surface, dirtyrects[0], dirtytable[0]);
-		dirtyrects[0] = 0;
 	}
 }
 

@@ -439,8 +439,9 @@ int KOBO_main::quit_requested()
 		  case SDL_QUIT:
 			exit_game_fast = 1;
 			break;
-		  case SDL_VIDEOEXPOSE:
-			gengine->invalidate();
+		  case SDL_WINDOWEVENT:
+			if(e.window.event == SDL_WINDOWEVENT_EXPOSED)
+				gengine->invalidate();
 			break;
 		  case SDL_KEYUP:
 			switch(e.key.keysym.sym)
@@ -455,9 +456,7 @@ int KOBO_main::quit_requested()
 			break;
 		}
 	}
-	if(exit_game_fast)
-		return 1;
-	return SDL_QuitRequested();
+	return exit_game_fast;
 }
 
 
@@ -1246,7 +1245,6 @@ int KOBO_main::init_js(prefs_t *p)
 		p->number_of_joysticks = SDL_NumJoysticks();
 		if(p->number_of_joysticks > 0)
 		{
-			SDL_JoystickEventState(SDL_ENABLE);
 			if(p->joystick_no >= p->number_of_joysticks)
 				p->joystick_no = 0;
 			joystick = SDL_JoystickOpen(p->joystick_no);
@@ -1276,7 +1274,7 @@ void KOBO_main::close_js()
 	if(!joystick)
 		return;
 
-	if(SDL_JoystickOpened(0))
+	if(SDL_JoystickGetAttached(joystick))
 		SDL_JoystickClose(joystick);
 	joystick = NULL;
 
@@ -1619,7 +1617,7 @@ void kobo_gfxengine_t::frame()
 				break;
 			  case SDLK_RETURN:
 				ms = SDL_GetModState();
-				if(ms & (KMOD_CTRL | KMOD_SHIFT | KMOD_META))
+				if(ms & (KMOD_CTRL | KMOD_SHIFT | KMOD_GUI))
 					break;
 				if(!(ms & KMOD_ALT))
 					break;
@@ -1630,8 +1628,7 @@ void kobo_gfxengine_t::frame()
 						OS_RESTART_VIDEO;
 				stop();
 				return;
-			  case SDLK_PRINT:
-			  case SDLK_SYSREQ:
+			  case SDLK_PRINTSCREEN:
 // FIXME: Doesn't this trigger when entering names and stuff...?
 			  case SDLK_s:
 				gengine->screenshot();
@@ -1641,7 +1638,7 @@ void kobo_gfxengine_t::frame()
 			}
 			k = gamecontrol.map(ev.key.keysym.sym);
 			gamecontrol.press(k);
-			gsm.press(k, ev.key.keysym.unicode);
+			gsm.press(k);
 			break;
 		  case SDL_KEYUP:
 			if((ev.key.keysym.sym == SDLK_ESCAPE) && km.escape_hammering())
@@ -1679,13 +1676,21 @@ void kobo_gfxengine_t::frame()
 				gsm.release(k);
 			}
 			break;
-		  case SDL_VIDEOEXPOSE:
-			gengine->invalidate();
-			break;
-		  case SDL_ACTIVEEVENT:
-			// Any type of focus loss should activate pause mode!
-			if(!ev.active.gain && ev.active.state != SDL_APPINPUTFOCUS)
+		  case SDL_WINDOWEVENT:
+			switch(ev.window.event)
+			{
+			  case SDL_WINDOWEVENT_EXPOSED:
+				gengine->invalidate();
+				break;
+			  case SDL_WINDOWEVENT_FOCUS_LOST:
+			  case SDL_WINDOWEVENT_MINIMIZED:
 				km.pause_game();
+				break;
+			}
+			break;
+		  case SDL_TEXTINPUT:
+			// Route typed characters to the state machine for name entry.
+			gsm.press(0, (unsigned char)ev.text.text[0]);
 			break;
 		  case SDL_QUIT:
 			/*gsm.press(BTN_CLOSE);*/

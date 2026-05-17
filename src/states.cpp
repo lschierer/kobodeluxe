@@ -336,15 +336,15 @@ void st_game_t::enter()
 		gsm.change(&st_error);
 	}
 	if(prefs->mousecapture)
-		if(SDL_WM_GrabInput(SDL_GRAB_QUERY) != SDL_GRAB_ON)
-			SDL_WM_GrabInput(SDL_GRAB_ON);
+		if(!SDL_GetWindowGrab(gengine->sdl_window_handle()))
+			SDL_SetWindowGrab(gengine->sdl_window_handle(), SDL_TRUE);
 }
 
 
 void st_game_t::leave()
 {
-	if(SDL_WM_GrabInput(SDL_GRAB_QUERY) == SDL_GRAB_ON)
-		SDL_WM_GrabInput(SDL_GRAB_OFF);
+	if(SDL_GetWindowGrab(gengine->sdl_window_handle()))
+		SDL_SetWindowGrab(gengine->sdl_window_handle(), SDL_FALSE);
 	st_intro_title.inext = &st_intro_instructions;
 	st_intro_title.duration = INTRO_TITLE_TIME + 2000;
 	st_intro_title.mode = 0;
@@ -353,16 +353,16 @@ void st_game_t::leave()
 
 void st_game_t::yield()
 {
-	if(SDL_WM_GrabInput(SDL_GRAB_QUERY) == SDL_GRAB_ON)
-		SDL_WM_GrabInput(SDL_GRAB_OFF);
+	if(SDL_GetWindowGrab(gengine->sdl_window_handle()))
+		SDL_SetWindowGrab(gengine->sdl_window_handle(), SDL_FALSE);
 }
 
 
 void st_game_t::reenter()
 {
 	if(prefs->mousecapture)
-		if(SDL_WM_GrabInput(SDL_GRAB_QUERY) != SDL_GRAB_ON)
-			SDL_WM_GrabInput(SDL_GRAB_ON);
+		if(!SDL_GetWindowGrab(gengine->sdl_window_handle()))
+			SDL_SetWindowGrab(gengine->sdl_window_handle(), SDL_TRUE);
 }
 
 
@@ -878,12 +878,12 @@ void new_player_t::open()
 	currentIndex = 0;
 	editing = 1;
 	build_all();
-	SDL_EnableUNICODE(1);
+	SDL_StartTextInput();
 }
 
 void new_player_t::close()
 {
-	SDL_EnableUNICODE(0);
+	SDL_StopTextInput();
 	clean();
 }
 

@@ -383,16 +383,30 @@ static int extract_sprite(s_bank_t *bank, unsigned frame,
 
 	/* Copy palette, if any */
 	if(src->format->palette)
-		SDL_SetColors(tmp, src->format->palette->colors, 0,
+		SDL_SetPaletteColors(tmp->format->palette,
+				src->format->palette->colors, 0,
 				src->format->palette->ncolors);
 
-	/* Copy alpha and colorkey */
-	if(src->flags & SDL_SRCALPHA)
-		SDL_SetAlpha(tmp, src->flags & (SDL_SRCALPHA | SDL_RLEACCEL),
-				src->format->alpha);
-	if(src->flags & SDL_SRCCOLORKEY)
-		SDL_SetColorKey(tmp, src->flags & (SDL_SRCCOLORKEY | SDL_RLEACCEL),
-				src->format->colorkey);
+	/* Copy alpha blend mode */
+	{
+		SDL_BlendMode blend;
+		if(SDL_GetSurfaceBlendMode(src, &blend) == 0)
+		{
+			SDL_SetSurfaceBlendMode(tmp, blend);
+			if(blend == SDL_BLENDMODE_BLEND)
+			{
+				Uint8 alpha;
+				SDL_GetSurfaceAlphaMod(src, &alpha);
+				SDL_SetSurfaceAlphaMod(tmp, alpha);
+			}
+		}
+	}
+	/* Copy colorkey */
+	{
+		Uint32 colorkey;
+		if(SDL_GetColorKey(src, &colorkey) == 0)
+			SDL_SetColorKey(tmp, SDL_TRUE, colorkey);
+	}
 
 	bank->sprites[frame]->surface = tmp;
 

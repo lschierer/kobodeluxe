@@ -54,7 +54,6 @@ void gamecontrol_t::init(int always_fire)
 	down = 0;
 	shot = 0;
 	movekey_pressed = 0;
-	SDL_EnableKeyRepeat(r_delay, r_interval);
 }
 
 
@@ -68,9 +67,6 @@ void gamecontrol_t::repeat(int delay, int interval)
 {
 	r_delay = delay;
 	r_interval = interval;
-	//Temporary kludge - should apply repeat to
-	//all switch inputs, not just the keyboard!
-	SDL_EnableKeyRepeat(delay, interval);
 }
 
 
@@ -80,7 +76,7 @@ void gamecontrol_t::clear()
 }
 
 
-int gamecontrol_t::map(SDLKey sym)
+int gamecontrol_t::map(SDL_Keycode sym)
 {
 /*
 FIXME: This should be replaced by a configurable mapping system.
