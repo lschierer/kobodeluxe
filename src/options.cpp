@@ -394,23 +394,27 @@ void control_options_t::build()
 		item("5 frames", 5);
 	space();
 
-	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
-		label("Could not initialize joysticks!");
+	if(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
+		label("Could not initialize game controllers!");
 	else
 	{
-		prf->number_of_joysticks = SDL_NumJoysticks();
-		yesno("Use Joystick", &prf->use_joystick,
+		int ncontrollers = 0;
+		for(int i = 0; i < SDL_NumJoysticks(); ++i)
+			if(SDL_IsGameController(i))
+				++ncontrollers;
+		prf->number_of_joysticks = ncontrollers;
+		yesno("Use Game Controller", &prf->use_joystick,
 				OS_RESTART_INPUT | OS_REBUILD);
 		if(prf->use_joystick)
 		{
-			if(prf->number_of_joysticks)
+			if(ncontrollers)
 			{
-				list("Joystick Number", &prf->joystick_no,
+				list("Controller Number", &prf->joystick_no,
 						OS_RESTART_INPUT);
-					enum_list(0, prf->number_of_joysticks - 1);
+					enum_list(0, ncontrollers - 1);
 			}
 			else
-				label("No Joysticks Found!");
+				label("No Game Controllers Found!");
 		}
 	}
 	space();

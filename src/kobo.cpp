@@ -63,12 +63,6 @@ extern "C" {
 
 #define	MAX_FPS_RESULTS	64
 
-/* Joystick support */
-#define DEFAULT_JOY_LR		0	// Joystick axis left-right default
-#define DEFAULT_JOY_UD		1	// Joystick axis up-down default
-#define DEFAULT_JOY_FIRE	0	// Default fire button on joystick
-#define DEFAULT_JOY_START	1
-
 
 /*----------------------------------------------------------
 	Singletons
@@ -165,6 +159,21 @@ static void setup_dirs(char *xpath)
 	 */
 #ifdef KOBO_USERDIR
 	fmap->addpath("CONFIG", KOBO_USERDIR);
+#endif
+
+#ifdef KOBO_USERDIR
+	// Create the user data directory on first run if it doesn't exist.
+	{
+		const char *home = getenv("HOME");
+		if(home)
+		{
+			char userdir[512];
+			snprintf(userdir, sizeof(userdir), "%s/.kobodeluxe", home);
+			struct stat st;
+			if(stat(userdir, &st) != 0)
+				::mkdir(userdir, 0755);
+		}
+	}
 #endif
 	/* System local */
 #ifdef KOBO_SYSCONFDIR
@@ -303,11 +312,7 @@ class KOBO_main
 #ifdef DEBUG
 	static int		audio_vismode;
 #endif
-	static SDL_Joystick	*joystick;
-	static int		js_lr;
-	static int		js_ud;
-	static int		js_fire;
-	static int		js_start;
+	static SDL_GameController *controller;
 
 	static FILE		*logfile;
 
@@ -367,11 +372,7 @@ class KOBO_main
 int		KOBO_main::audio_vismode = 0;
 #endif
 
-SDL_Joystick	*KOBO_main::joystick = NULL;
-int		KOBO_main::js_lr = DEFAULT_JOY_LR;
-int		KOBO_main::js_ud = DEFAULT_JOY_UD;
-int		KOBO_main::js_fire = DEFAULT_JOY_FIRE;
-int		KOBO_main::js_start = DEFAULT_JOY_START;
+SDL_GameController *KOBO_main::controller = NULL;
 
 FILE		*KOBO_main::logfile = NULL;
 
@@ -1234,51 +1235,68 @@ int KOBO_main::load_sounds(prefs_t *p, int render_all)
 
 int KOBO_main::init_js(prefs_t *p)
 {
-	/* Activate Joystick sub-sys if we are using it */
-	if(p->use_joystick)
-	{
-		if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
-		{
-			log_printf(ELOG, "Error setting up joystick!\n");
-			return -1;
-		}
-		p->number_of_joysticks = SDL_NumJoysticks();
-		if(p->number_of_joysticks > 0)
-		{
-			if(p->joystick_no >= p->number_of_joysticks)
-				p->joystick_no = 0;
-			joystick = SDL_JoystickOpen(p->joystick_no);
-			if(!joystick)
-			{
-				SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
-				return -2;
-			}
-		}
-		else
-		{
-			log_printf(ELOG, "No joysticks found!\n");
-			joystick = NULL;
-			return -3;
-		}
+	if(!p->use_joystick)
+		return 0;
 
+	if(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
+	{
+		log_printf(ELOG, "Error setting up game controller!\n");
+		return -1;
 	}
+
+	// Count game controllers among all joystick devices.
+	int ncontrollers = 0;
+	for(int i = 0; i < SDL_NumJoysticks(); ++i)
+		if(SDL_IsGameController(i))
+			++ncontrollers;
+	p->number_of_joysticks = ncontrollers;
+
+	if(ncontrollers == 0)
+	{
+		log_printf(ELOG, "No game controllers found!\n");
+		return -3;
+	}
+
+	int target = p->joystick_no;
+	if(target >= ncontrollers)
+		target = p->joystick_no = 0;
+
+	int found = 0;
+	for(int i = 0; i < SDL_NumJoysticks(); ++i)
+	{
+		if(!SDL_IsGameController(i))
+			continue;
+		if(found == target)
+		{
+			controller = SDL_GameControllerOpen(i);
+			break;
+		}
+		++found;
+	}
+
+	if(!controller)
+	{
+		SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+		return -2;
+	}
+
 	return 0;
 }
 
 
 void KOBO_main::close_js()
 {
-	if(!SDL_WasInit(SDL_INIT_JOYSTICK))
+	if(!SDL_WasInit(SDL_INIT_GAMECONTROLLER))
 		return;
 
-	if(!joystick)
-		return;
+	if(controller)
+	{
+		if(SDL_GameControllerGetAttached(controller))
+			SDL_GameControllerClose(controller);
+		controller = NULL;
+	}
 
-	if(SDL_JoystickGetAttached(joystick))
-		SDL_JoystickClose(joystick);
-	joystick = NULL;
-
-	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 }
 
 
@@ -1696,36 +1714,77 @@ void kobo_gfxengine_t::frame()
 			/*gsm.press(BTN_CLOSE);*/
 			km.brutal_quit();
 			break;
-		  case SDL_JOYBUTTONDOWN:
-			if(ev.jbutton.button == km.js_fire)
+		  case SDL_CONTROLLERBUTTONDOWN:
+			switch(ev.cbutton.button)
 			{
+			  case SDL_CONTROLLER_BUTTON_A:
+			  case SDL_CONTROLLER_BUTTON_B:
+			  case SDL_CONTROLLER_BUTTON_X:
+			  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
 				gamecontrol.press(BTN_FIRE);
 				gsm.press(BTN_FIRE);
-			}
-			else if(ev.jbutton.button == km.js_start)
-			{
+				break;
+			  case SDL_CONTROLLER_BUTTON_START:
+			  case SDL_CONTROLLER_BUTTON_BACK:
 				gamecontrol.press(BTN_START);
 				gsm.press(BTN_START);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_UP:
+				gamecontrol.press(BTN_UP);
+				gsm.press(BTN_UP);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+				gamecontrol.press(BTN_DOWN);
+				gsm.press(BTN_DOWN);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+				gamecontrol.press(BTN_LEFT);
+				gsm.press(BTN_LEFT);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+				gamecontrol.press(BTN_RIGHT);
+				gsm.press(BTN_RIGHT);
+				break;
 			}
 			break;
-		  case SDL_JOYBUTTONUP:
-			if(ev.jbutton.button == km.js_fire)
+		  case SDL_CONTROLLERBUTTONUP:
+			switch(ev.cbutton.button)
 			{
+			  case SDL_CONTROLLER_BUTTON_A:
+			  case SDL_CONTROLLER_BUTTON_B:
+			  case SDL_CONTROLLER_BUTTON_X:
+			  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
 				gamecontrol.release(BTN_FIRE);
 				gsm.release(BTN_FIRE);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_UP:
+				gamecontrol.release(BTN_UP);
+				gsm.release(BTN_UP);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+				gamecontrol.release(BTN_DOWN);
+				gsm.release(BTN_DOWN);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+				gamecontrol.release(BTN_LEFT);
+				gsm.release(BTN_LEFT);
+				break;
+			  case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+				gamecontrol.release(BTN_RIGHT);
+				gsm.release(BTN_RIGHT);
+				break;
 			}
 			break;
-		  case SDL_JOYAXISMOTION:
-			// FIXME: We will want to allow these to be
-			// redefined, but for now, this works ;-)
-			if(ev.jaxis.axis == km.js_lr)
+		  case SDL_CONTROLLERAXISMOTION:
+			switch(ev.caxis.axis)
 			{
-				if(ev.jaxis.value < -3200)
+			  case SDL_CONTROLLER_AXIS_LEFTX:
+				if(ev.caxis.value < -8000)
 				{
 					gamecontrol.press(BTN_LEFT);
 					gsm.press(BTN_LEFT);
 				}
-				else if(ev.jaxis.value > 3200)
+				else if(ev.caxis.value > 8000)
 				{
 					gamecontrol.press(BTN_RIGHT);
 					gsm.press(BTN_RIGHT);
@@ -1737,16 +1796,14 @@ void kobo_gfxengine_t::frame()
 					gsm.release(BTN_LEFT);
 					gsm.release(BTN_RIGHT);
 				}
-
-			}
-			else if(ev.jaxis.axis == km.js_ud)
-			{
-				if(ev.jaxis.value < -3200)
+				break;
+			  case SDL_CONTROLLER_AXIS_LEFTY:
+				if(ev.caxis.value < -8000)
 				{
 					gamecontrol.press(BTN_UP);
 					gsm.press(BTN_UP);
 				}
-				else if(ev.jaxis.value > 3200)
+				else if(ev.caxis.value > 8000)
 				{
 					gamecontrol.press(BTN_DOWN);
 					gsm.press(BTN_DOWN);
@@ -1758,8 +1815,24 @@ void kobo_gfxengine_t::frame()
 					gsm.release(BTN_UP);
 					gsm.release(BTN_DOWN);
 				}
-
+				break;
 			}
+			break;
+		  case SDL_CONTROLLERDEVICEADDED:
+			// Hot-plug: open the first controller if none is active.
+			if(!km.controller && prefs->use_joystick &&
+					SDL_IsGameController(ev.cdevice.which))
+				km.controller = SDL_GameControllerOpen(ev.cdevice.which);
+			break;
+		  case SDL_CONTROLLERDEVICEREMOVED:
+			if(km.controller &&
+					SDL_GameControllerFromInstanceID(ev.cdevice.which)
+					== km.controller)
+			{
+				SDL_GameControllerClose(km.controller);
+				km.controller = NULL;
+			}
+			break;
 		  case SDL_MOUSEMOTION:
 			mouse_x = (int)(ev.motion.x / gengine->xscale()) - km.xoffs;
 			mouse_y = (int)(ev.motion.y / gengine->yscale()) - km.yoffs;
