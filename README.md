@@ -81,7 +81,16 @@ Then follow the same `cmake -B build … cmake --build build` steps above.
 | Fire | Left Shift, Left Ctrl |
 | Menu / Pause | Escape |
 
-Mouse and joystick input can be enabled in the in-game Options menu.
+**Game controller** (Xbox, PlayStation, Switch Pro, etc.) can be enabled in the
+in-game Options → Input menu.  When active:
+
+| Action | Button |
+|--------|--------|
+| Move | Left stick or D-pad |
+| Fire | A, B, X, or Right Shoulder |
+| Pause / Menu | Start or Back |
+
+Mouse input can also be enabled from the Options menu.
 
 ---
 
