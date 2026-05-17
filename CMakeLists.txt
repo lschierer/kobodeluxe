@@ -68,18 +68,33 @@ add_subdirectory(src)
 # ---------------------------------------------------------------------------
 # Game data
 # ---------------------------------------------------------------------------
-install(DIRECTORY data/gfx
-    DESTINATION "${KOBO_SHARE_DIR}"
-    FILES_MATCHING
-        PATTERN "*.png"
-        PATTERN "*.gpl"
-        PATTERN "*.theme")
-
-install(DIRECTORY data/sfx
-    DESTINATION "${KOBO_SHARE_DIR}"
-    FILES_MATCHING
-        PATTERN "*.a2s"
-        PATTERN "*.theme")
+if(APPLE)
+    # On macOS, install data inside the bundle next to the binary so the
+    # app is self-contained and can be dragged to /Applications.
+    install(DIRECTORY data/gfx
+        DESTINATION "kobodl.app/Contents/MacOS"
+        FILES_MATCHING
+            PATTERN "*.png"
+            PATTERN "*.gpl"
+            PATTERN "*.theme")
+    install(DIRECTORY data/sfx
+        DESTINATION "kobodl.app/Contents/MacOS"
+        FILES_MATCHING
+            PATTERN "*.a2s"
+            PATTERN "*.theme")
+else()
+    install(DIRECTORY data/gfx
+        DESTINATION "${KOBO_SHARE_DIR}"
+        FILES_MATCHING
+            PATTERN "*.png"
+            PATTERN "*.gpl"
+            PATTERN "*.theme")
+    install(DIRECTORY data/sfx
+        DESTINATION "${KOBO_SHARE_DIR}"
+        FILES_MATCHING
+            PATTERN "*.a2s"
+            PATTERN "*.theme")
+endif()
 
 # ---------------------------------------------------------------------------
 # Documentation
@@ -121,15 +136,28 @@ set(CPACK_RESOURCE_FILE_LICENSE     "${PROJECT_SOURCE_DIR}/COPYING")
 set(CPACK_RESOURCE_FILE_README      "${PROJECT_SOURCE_DIR}/README.md")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Arcade style 2D shooter")
 set(CPACK_STRIP_FILES               TRUE)
-set(CPACK_SET_DESTDIR               ON)
-set(CPACK_PACKAGE_RELOCATABLE       FALSE)
 
 if(WIN32)
     set(CPACK_GENERATOR "ZIP")
+    set(CPACK_SET_DESTDIR               ON)
+    set(CPACK_PACKAGE_RELOCATABLE       FALSE)
 elseif(APPLE)
-    set(CPACK_GENERATOR "TGZ")
+    # Bundle SDL2 and other Homebrew dylibs into the .app before packaging.
+    install(CODE "
+        include(BundleUtilities)
+        fixup_bundle(
+            \"\${CMAKE_INSTALL_PREFIX}/kobodl.app\"
+            \"\"
+            \"/opt/homebrew/lib;/opt/homebrew/opt/sdl2/lib;/opt/homebrew/opt/sdl2_image/lib\"
+        )
+    " COMPONENT Runtime)
+    set(CPACK_GENERATOR                 "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME           "Kobo Deluxe ${VERSION_STRING}")
+    set(CPACK_PACKAGE_RELOCATABLE       TRUE)
 else()
     set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_SET_DESTDIR               ON)
+    set(CPACK_PACKAGE_RELOCATABLE       FALSE)
     set(CPACK_DEBIAN_PACKAGE_SECTION    "games")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS  ON)
     set(CMAKE_INSTALL_RPATH             "${CMAKE_INSTALL_PREFIX}/lib")
