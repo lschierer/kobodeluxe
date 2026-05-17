@@ -29,6 +29,20 @@ message(STATUS "| KOBO_EXTRA_LIBRARIES: ${KOBO_EXTRA_LIBRARIES}")
 message(STATUS "'-----------------------------------------")
 
 # ---------------------------------------------------------------------------
+# Default install prefix
+# ---------------------------------------------------------------------------
+# Set a sensible per-platform default before GNUInstallDirs locks things in.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    if(APPLE)
+        # ~/Applications requires no sudo and is the right place for
+        # user-built apps.  System-wide installs can pass
+        # -DCMAKE_INSTALL_PREFIX=/Applications explicitly.
+        set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/Applications"
+            CACHE PATH "Install prefix" FORCE)
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Install layout
 # ---------------------------------------------------------------------------
 if(WIN32 AND WIN32_ZIP_BUILD)
@@ -80,8 +94,8 @@ if(APPLE)
     install(DIRECTORY data/sfx
         DESTINATION "kobodl.app/Contents/MacOS"
         FILES_MATCHING
-            PATTERN "*.a2s"
-            PATTERN "*.theme")
+            PATTERN "*.agw"
+            PATTERN "*.mid")
 else()
     install(DIRECTORY data/gfx
         DESTINATION "${KOBO_SHARE_DIR}"
@@ -92,8 +106,8 @@ else()
     install(DIRECTORY data/sfx
         DESTINATION "${KOBO_SHARE_DIR}"
         FILES_MATCHING
-            PATTERN "*.a2s"
-            PATTERN "*.theme")
+            PATTERN "*.agw"
+            PATTERN "*.mid")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -143,12 +157,19 @@ if(WIN32)
     set(CPACK_PACKAGE_RELOCATABLE       FALSE)
 elseif(APPLE)
     # Bundle SDL2 and other Homebrew dylibs into the .app before packaging.
+    # Then re-sign with an ad-hoc signature: install_name_tool (used inside
+    # fixup_bundle) invalidates the linker-applied signature, and macOS
+    # refuses to run arm64 binaries with a broken signature.
     install(CODE "
         include(BundleUtilities)
         fixup_bundle(
             \"\${CMAKE_INSTALL_PREFIX}/kobodl.app\"
             \"\"
             \"/opt/homebrew/lib;/opt/homebrew/opt/sdl2/lib;/opt/homebrew/opt/sdl2_image/lib\"
+        )
+        execute_process(COMMAND
+            codesign --deep --force --sign -
+                \"\${CMAKE_INSTALL_PREFIX}/kobodl.app\"
         )
     " COMPONENT Runtime)
     set(CPACK_GENERATOR                 "DragNDrop")
