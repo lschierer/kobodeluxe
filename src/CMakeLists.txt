@@ -117,7 +117,14 @@ endif()
 # ---------------------------------------------------------------------------
 # Executable
 # ---------------------------------------------------------------------------
-add_executable(kobodl WIN32 MACOSX_BUNDLE ${sources} ${RES_FILES})
+if(APPLE)
+    set(MACOS_ICON "${PROJECT_SOURCE_DIR}/icons/kobodl.icns")
+    set_source_files_properties("${MACOS_ICON}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+endif()
+
+add_executable(kobodl WIN32 MACOSX_BUNDLE ${sources} ${RES_FILES}
+    $<$<BOOL:${APPLE}>:${MACOS_ICON}>)
 
 set_target_properties(kobodl PROPERTIES
     OUTPUT_NAME "kobodl"
@@ -127,6 +134,7 @@ set_target_properties(kobodl PROPERTIES
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${VERSION_STRING}"
     MACOSX_BUNDLE_GUI_IDENTIFIER     "net.olofson.kobodeluxe"
     MACOSX_BUNDLE_COPYRIGHT          "Copyright © 1995-2018 David Olofson"
+    MACOSX_BUNDLE_ICON_FILE          "kobodl.icns"
     # C++ standard
     CXX_STANDARD 14
     CXX_STANDARD_REQUIRED ON
