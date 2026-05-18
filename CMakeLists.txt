@@ -95,7 +95,8 @@ if(APPLE)
         DESTINATION "kobodl.app/Contents/MacOS"
         FILES_MATCHING
             PATTERN "*.agw"
-            PATTERN "*.mid")
+            PATTERN "*.mid"
+            PATTERN "*.h")
 else()
     install(DIRECTORY data/gfx
         DESTINATION "${KOBO_SHARE_DIR}"
@@ -107,7 +108,8 @@ else()
         DESTINATION "${KOBO_SHARE_DIR}"
         FILES_MATCHING
             PATTERN "*.agw"
-            PATTERN "*.mid")
+            PATTERN "*.mid"
+            PATTERN "*.h")
 endif()
 
 # ---------------------------------------------------------------------------
